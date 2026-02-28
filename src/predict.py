@@ -1,6 +1,6 @@
 # predict.py
 # ======================================================
-# Inference / Prediction Engine
+# Robust Inference / Prediction Engine
 # ======================================================
 
 import joblib
@@ -11,89 +11,100 @@ from src.utils import clean_data, encode_data, feature_engineering
 
 
 # ------------------------------------------------------
-# Load model
+# REQUIRED FIELDS FOR SINGLE PREDICTION
 # ------------------------------------------------------
-def load_model(model_path):
-    """
-    Loads a saved .pkl model.
-    """
-    return joblib.load(model_path)
-
-
-# ------------------------------------------------------
-# Preprocess a single row of new data
-# ------------------------------------------------------
-def preprocess_single(input_dict):
-    """
-    Accepts a python dictionary with passenger features.
-    Converts it into a model-ready row (DataFrame).
-    """
-    df = pd.DataFrame([input_dict])
-
-    # Follow the same cleaning steps
-    df = clean_data(df)
-    df = encode_data(df)
-    df = feature_engineering(df)
-
-    return df
+REQUIRED_FIELDS = [
+    "PassengerId", "Pclass", "Name", "Sex", "Age",
+    "SibSp", "Parch", "Ticket", "Fare", "Cabin", "Embarked"
+]
 
 
 # ------------------------------------------------------
-# Predict for a single passenger
+# Safe default filler (to avoid missing-field errors)
 # ------------------------------------------------------
-def predict_single(model_path, user_input):
-    """
-    Predicts survival for one passenger.
-    user_input must be a dictionary.
-    """
-    model = load_model(model_path)
-    processed = preprocess_single(user_input)
-
-    prediction = model.predict(processed)[0]
-
-    return "Survived" if prediction == 1 else "Died"
-
-
-# ------------------------------------------------------
-# Batch prediction for multiple rows
-# ------------------------------------------------------
-def predict_batch(model_path, csv_path):
-    """
-    Takes a CSV file, preprocesses it, predicts for all rows.
-    """
-    model = load_model(model_path)
-
-    # Load raw CSV
-    df = pd.read_csv(csv_path)
-
-    # Run preprocessing pipeline (manual because preprocess() expects PassengerId etc.)
-    df = clean_data(df)
-    df = encode_data(df)
-    df = feature_engineering(df)
-
-    preds = model.predict(df)
-
-    df["Prediction"] = ["Survived" if p == 1 else "Died" for p in preds]
-
-    return df
-
-
-# ------------------------------------------------------
-# CLI runner
-# ------------------------------------------------------
-if __name__ == "__main__":
-    example = {
-        "PassengerId": 1000,
-        "Pclass": 1,
-        "Name": "Allen, Mr. John",
+def fill_missing_input(user_input):
+    defaults = {
+        "PassengerId": 9999,
+        "Pclass": 3,
+        "Name": "Unknown, Mr. Guest",
         "Sex": "male",
-        "Age": 35,
+        "Age": 30,
         "SibSp": 0,
         "Parch": 0,
-        "Ticket": "A/5",
-        "Fare": 70.0,
+        "Ticket": "UNKNOWN",
+        "Fare": 20.0,
         "Cabin": "",
         "Embarked": "S"
     }
 
-    print(predict_single("models/model_default.pkl", example))
+    final = {}
+    for key in REQUIRED_FIELDS:
+        final[key] = user_input.get(key, defaults[key])
+
+    return final
+
+
+# ------------------------------------------------------
+# Load model safely
+# ------------------------------------------------------
+def load_model(model_path):
+    return joblib.load(model_path)
+
+
+# ------------------------------------------------------
+# Preprocess single row safely
+# ------------------------------------------------------
+def preprocess_single(user_input):
+    safe_input = fill_missing_input(user_input)
+    df = pd.DataFrame([safe_input])
+
+    df = clean_data(df)
+    df = encode_data(df)
+    df = feature_engineering(df)
+
+    return df
+
+
+# ------------------------------------------------------
+# Predict single passenger survival
+# ------------------------------------------------------
+def predict_single(model_path, user_input):
+    model = load_model(model_path)
+    processed = preprocess_single(user_input)
+
+    pred = model.predict(processed)[0]
+
+    return "Survived" if pred == 1 else "Died"
+
+
+# ------------------------------------------------------
+# Batch prediction
+# ------------------------------------------------------
+def predict_batch(model_path, csv_path):
+    model = load_model(model_path)
+
+    raw = pd.read_csv(csv_path)
+    raw = clean_data(raw)
+    raw = encode_data(raw)
+    raw = feature_engineering(raw)
+
+    preds = model.predict(raw)
+
+    raw["Prediction"] = ["Survived" if p == 1 else "Died" for p in preds]
+
+    return raw
+
+
+# ------------------------------------------------------
+# Quick test
+# ------------------------------------------------------
+if __name__ == "__main__":
+    sample = {
+        "Pclass": 1,
+        "Sex": "female",
+        "Age": 25,
+        "Fare": 80.0
+        # Missing many fields on purpose
+    }
+
+    print(predict_single("models/model_default.pkl", sample))
