@@ -124,13 +124,13 @@ print(classification_report(y_test, pred_lr))
 # ============================================
 
 model_rf = RandomForestClassifier()
-model_rf.fit(X_train, y_train)
+modeit(X_train, y_train)
 pred_rf = model_rf.predict(X_test)
 
 print("RF Accuracy:", accuracy_score(y_test, pred_rf))
 print(confusion_matrix(y_test, pred_rf))
 print(classification_report(y_test, pred_rf))
-
+l_rf.f
 
 # ============================================
 # 10) HYPERPARAMETER TUNING (RANDOM FOREST)
